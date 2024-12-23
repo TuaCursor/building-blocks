@@ -17,7 +17,8 @@ public:
     
     // Generate chunk data using noise/SDF
     void GenerateData();
-    
+    float GenerateNoise(const FVector& WorldPos) const;
+
     // Get voxel data at local position
     FVoxelData GetVoxel(const FIntVector& LocalPos) const;
     

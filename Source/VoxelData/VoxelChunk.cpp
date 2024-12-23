@@ -2,6 +2,8 @@
 #include "ProceduralMeshComponent.h"
 #include "SurfaceNets.h"
 
+struct FProcMeshTangent;
+
 FVoxelChunk::FVoxelChunk(const FIntVector& InPosition, int32 InLOD)
     : Position(InPosition)
     , LOD(InLOD)

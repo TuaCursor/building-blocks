@@ -1,5 +1,5 @@
 #include "VoxelPlanetActor.h"
-#include "Components/VoxelTerrainComponent.h"
+#include "VoxelPlanet/Components/VoxelTerrainComponent.h"
 
 AVoxelPlanetActor::AVoxelPlanetActor()
 {

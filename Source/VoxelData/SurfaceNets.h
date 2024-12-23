@@ -2,6 +2,8 @@
 
 #include "CoreMinimal.h"
 
+class FVoxelData;
+
 struct FSurfaceVertex 
 {
     FVector Position;

@@ -2,7 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
-#include "VoxelData/ChunkOctree.h"
+#include "VoxelPlanet/VoxelData/ChunkOctree.h"
 #include "VoxelTerrainComponent.generated.h"
 
 UCLASS(ClassGroup=(Custom), meta=(BlueprintSpawnableComponent))
@@ -20,8 +20,8 @@ public:
 
 protected:
     virtual void BeginPlay() override;
-
-private:
     TSharedPtr<FChunkOctree> ChunkOctree;
+    
+private:
     void UpdateLOD();
 }; 
