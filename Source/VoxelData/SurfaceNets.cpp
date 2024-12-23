@@ -1,13 +1,64 @@
 #include "SurfaceNets.h"
 #include "VoxelChunk.h"
 
+// Helper function to get distance value at a point
+static float GetDistance(const TArray<FVoxelData>& VoxelData, const FIntVector& Position, const FIntVector& ChunkSize)
+{
+    int32 Index = Position.X + Position.Y * ChunkSize.X + Position.Z * ChunkSize.X * ChunkSize.Y;
+    if (Index >= 0 && Index < VoxelData.Num())
+    {
+        return VoxelData[Index].Distance;
+    }
+    return 0.0f;
+}
+
+// Helper function to generate triangles from vertices
+static void GenerateTriangles(
+    const TArray<FCellVertex>& CellVertices,
+    const FIntVector& ChunkSize,
+    TArray<int32>& OutIndices)
+{
+    // For each cell that has a vertex
+    for (int32 z = 0; z < ChunkSize.Z - 1; z++)
+    {
+        for (int32 y = 0; y < ChunkSize.Y - 1; y++)
+        {
+            for (int32 x = 0; x < ChunkSize.X - 1; x++)
+            {
+                // Find vertices for current cell
+                int32 CellIndex = x + y * (ChunkSize.X - 1) + z * (ChunkSize.X - 1) * (ChunkSize.Y - 1);
+                if (CellIndex >= CellVertices.Num()) continue;
+
+                // Generate triangles connecting to neighboring cells
+                if (x < ChunkSize.X - 2 && y < ChunkSize.Y - 2 && z < ChunkSize.Z - 2)
+                {
+                    int32 NextX = CellIndex + 1;
+                    int32 NextY = CellIndex + (ChunkSize.X - 1);
+                    int32 NextZ = CellIndex + (ChunkSize.X - 1) * (ChunkSize.Y - 1);
+
+                    if (NextX < CellVertices.Num() && NextY < CellVertices.Num() && NextZ < CellVertices.Num())
+                    {
+                        // Add triangles
+                        OutIndices.Add(CellVertices[CellIndex].Index);
+                        OutIndices.Add(CellVertices[NextX].Index);
+                        OutIndices.Add(CellVertices[NextY].Index);
+
+                        OutIndices.Add(CellVertices[NextY].Index);
+                        OutIndices.Add(CellVertices[NextX].Index);
+                        OutIndices.Add(CellVertices[NextZ].Index);
+                    }
+                }
+            }
+        }
+    }
+}
+
 void FSurfaceNets::GenerateMesh(
     const TArray<FVoxelData>& VoxelData,
     const FIntVector& ChunkSize,
     TArray<FSurfaceVertex>& OutVertices,
     TArray<int32>& OutIndices)
 {
-    // Similar to the Rust surface_nets implementation
     struct FCellVertex
     {
         FVector Position;
@@ -82,35 +133,34 @@ FVector FSurfaceNets::CalculateVertexPosition(
         {0,4}, {1,5}, {2,6}, {3,7}   // Vertical edges
     };
     
+    const FIntVector ChunkSize(32, 32, 32); // Using CHUNK_SIZE constant
+    
     for (int32 Edge = 0; Edge < 12; Edge++)
     {
-        const int32 V0 = EdgeTable[Edge][0];
-        const int32 V1 = EdgeTable[Edge][1];
+        const int32 V0Index = EdgeTable[Edge][0];
+        const int32 V1Index = EdgeTable[Edge][1];
         
         // Get positions and values at edge endpoints
         FVector P0 = FVector(
-            Position.X + (V0 & 1),
-            Position.Y + ((V0 >> 1) & 1),
-            Position.Z + ((V0 >> 2) & 1)
+            Position.X + (V0Index & 1),
+            Position.Y + ((V0Index >> 1) & 1),
+            Position.Z + ((V0Index >> 2) & 1)
         );
         
         FVector P1 = FVector(
-            Position.X + (V1 & 1),
-            Position.Y + ((V1 >> 1) & 1),
-            Position.Z + ((V1 >> 2) & 1)
+            Position.X + (V1Index & 1),
+            Position.Y + ((V1Index >> 1) & 1),
+            Position.Z + ((V1Index >> 2) & 1)
         );
         
-        int32 I0 = P0.X + P0.Y * ChunkSize.X + P0.Z * ChunkSize.X * ChunkSize.Y;
-        int32 I1 = P1.X + P1.Y * ChunkSize.X + P1.Z * ChunkSize.X * ChunkSize.Y;
+        float Value0 = GetDistance(VoxelData, FIntVector(P0), ChunkSize);
+        float Value1 = GetDistance(VoxelData, FIntVector(P1), ChunkSize);
         
-        float V0 = VoxelData[I0].Distance;
-        float V1 = VoxelData[I1].Distance;
-        
-        if (V0 * V1 < 0)  // Edge crosses surface
+        if (Value0 * Value1 < 0)  // Edge crosses surface
         {
-            float T = V0 / (V0 - V1);
+            float T = Value0 / (Value0 - Value1);
             FVector CrossingPoint = FMath::Lerp(P0, P1, T);
-            float Weight = FMath::Abs(1.0f / (V0 - V1));
+            float Weight = FMath::Abs(1.0f / (Value0 - Value1));
             
             Sum += CrossingPoint * Weight;
             WeightSum += Weight;
@@ -130,15 +180,16 @@ FVector FSurfaceNets::CalculateNormal(
 {
     // Calculate normal using central differences
     const float H = 1.0f;
+    const FIntVector ChunkSize(32, 32, 32); // Using CHUNK_SIZE constant
     
-    float DX = (GetDistance(VoxelData, Position + FIntVector(1,0,0)) -
-                GetDistance(VoxelData, Position - FIntVector(1,0,0))) / (2*H);
+    float DX = (GetDistance(VoxelData, Position + FIntVector(1,0,0), ChunkSize) -
+                GetDistance(VoxelData, Position - FIntVector(1,0,0), ChunkSize)) / (2*H);
                 
-    float DY = (GetDistance(VoxelData, Position + FIntVector(0,1,0)) -
-                GetDistance(VoxelData, Position - FIntVector(0,1,0))) / (2*H);
+    float DY = (GetDistance(VoxelData, Position + FIntVector(0,1,0), ChunkSize) -
+                GetDistance(VoxelData, Position - FIntVector(0,1,0), ChunkSize)) / (2*H);
                 
-    float DZ = (GetDistance(VoxelData, Position + FIntVector(0,0,1)) -
-                GetDistance(VoxelData, Position - FIntVector(0,0,1))) / (2*H);
+    float DZ = (GetDistance(VoxelData, Position + FIntVector(0,0,1), ChunkSize) -
+                GetDistance(VoxelData, Position - FIntVector(0,0,1), ChunkSize)) / (2*H);
                 
     return FVector(DX, DY, DZ).GetSafeNormal();
 } 
