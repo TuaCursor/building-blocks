@@ -6,7 +6,7 @@
 class VOXELPLANET_API FOctreeNode 
 {
 public:
-    FOctreeNode(const FIntVector& InPosition, int32 InSize, int32 InLOD);
+    FOctreeNode(const FIntVector& InPosition, int32 InSize, int32 InLOD, TArray<TSharedPtr<FVoxelChunk>>& InChunksToGenerate);
     
     void Split();
     void Merge();
@@ -21,6 +21,7 @@ private:
     int32 Size;
     int32 LOD;
     bool bHasChildren;
+    TArray<TSharedPtr<FVoxelChunk>>& ChunksToGenerate;
 };
 
 class VOXELPLANET_API FChunkOctree

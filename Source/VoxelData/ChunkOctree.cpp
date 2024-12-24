@@ -1,10 +1,11 @@
 #include "ChunkOctree.h"
 
-FOctreeNode::FOctreeNode(const FIntVector& InPosition, int32 InSize, int32 InLOD)
+FOctreeNode::FOctreeNode(const FIntVector& InPosition, int32 InSize, int32 InLOD, TArray<TSharedPtr<FVoxelChunk>>& InChunksToGenerate)
     : Position(InPosition)
     , Size(InSize)
     , LOD(InLOD)
     , bHasChildren(false)
+    , ChunksToGenerate(InChunksToGenerate)
 {
     Chunk = MakeShared<FVoxelChunk>(Position, LOD);
     Chunk->GenerateData();
@@ -30,7 +31,8 @@ void FOctreeNode::Split()
         Children.Add(MakeShared<FOctreeNode>(
             Position + Offset,
             ChildSize,
-            LOD - 1
+            LOD - 1,
+            ChunksToGenerate
         ));
     }
 }
@@ -89,7 +91,8 @@ FChunkOctree::FChunkOctree()
     RootNode = MakeShared<FOctreeNode>(
         FIntVector(-RootSize/2),
         RootSize,
-        8  // Max LOD level
+        8,  // Max LOD level
+        ChunksToGenerate  // Pass reference to member variable
     );
 }
 
