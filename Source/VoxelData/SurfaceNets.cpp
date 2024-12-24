@@ -1,6 +1,13 @@
 #include "SurfaceNets.h"
 #include "VoxelChunk.h"
 
+// Define FCellVertex at file scope
+struct FCellVertex
+{
+    FVector Position;
+    int32 Index;
+};
+
 // Helper function to get distance value at a point
 static float GetDistance(const TArray<FVoxelData>& VoxelData, const FIntVector& Position, const FIntVector& ChunkSize)
 {
@@ -59,12 +66,6 @@ void FSurfaceNets::GenerateMesh(
     TArray<FSurfaceVertex>& OutVertices,
     TArray<int32>& OutIndices)
 {
-    struct FCellVertex
-    {
-        FVector Position;
-        int32 Index;
-    };
-
     TArray<FCellVertex> CellVertices;
     
     // First pass: Generate vertices for each cell crossing the surface
