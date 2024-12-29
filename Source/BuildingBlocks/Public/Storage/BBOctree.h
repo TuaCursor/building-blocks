@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Core/BBPoint.h"
 #include "Core/BBSphere.h"
 #include "BBOctree.generated.h"
 
@@ -18,6 +19,11 @@ struct FOctreeNode
     FOctreeNode() : Position(FIntVector::ZeroValue), Size(0), LOD(0), bIsLeaf(true) {}
     FOctreeNode(const FIntVector& InPosition, int32 InSize, int32 InLOD)
         : Position(InPosition), Size(InSize), LOD(InLOD), bIsLeaf(true) {}
+
+    FIntBox GetBounds() const
+    {
+        return FIntBox(Position, Position + FIntVector(Size));
+    }
 };
 
 UCLASS()
