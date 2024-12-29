@@ -112,18 +112,21 @@ void FChunkOctree::GenerateChunks()
         return;
 
     // Create tasks for chunk data generation
-    TArray<FGraphEventRef> GenerationTasks;
+    FGraphEventArray GenerationTasks;
     GenerationTasks.Reserve(ChunksToGenerate.Num());
 
     // Launch data generation tasks
     for (auto& ChunkToGenerate : ChunksToGenerate)
     {
+        // Create a TUniqueFunction for the task
+        TUniqueFunction<void()> TaskFunction = [ChunkToGenerate]()
+        {
+            // Generate chunk data using noise/SDF
+            ChunkToGenerate->GenerateData();
+        };
+
         FGraphEventRef Task = FFunctionGraphTask::CreateAndDispatchWhenReady(
-            [ChunkToGenerate]()
-            {
-                // Generate chunk data using noise/SDF
-                ChunkToGenerate->GenerateData();
-            },
+            MoveTemp(TaskFunction),  // Use MoveTemp to transfer ownership
             TStatId(),
             nullptr,
             ENamedThreads::AnyBackgroundThreadNormalTask
@@ -132,22 +135,24 @@ void FChunkOctree::GenerateChunks()
     }
 
     // Create a completion task that will run after all generation tasks
-    FFunctionGraphTask::CreateAndDispatchWhenReady(
-        [this]()
+    TUniqueFunction<void()> CompletionFunction = [this]()
+    {
+        // This will run on the game thread after all chunks are generated
+        for (auto& ChunkToGenerate : ChunksToGenerate)
         {
-            // This will run on the game thread after all chunks are generated
-            for (auto& ChunkToGenerate : ChunksToGenerate)
+            UProceduralMeshComponent* MeshComponent = NewObject<UProceduralMeshComponent>();
+            if (MeshComponent)
             {
-                UProceduralMeshComponent* MeshComponent = NewObject<UProceduralMeshComponent>();
-                if (MeshComponent)
-                {
-                    MeshComponent->RegisterComponent();
-                    ChunkToGenerate->CreateMesh(MeshComponent);
-                }
+                MeshComponent->RegisterComponent();
+                ChunkToGenerate->CreateMesh(MeshComponent);
             }
-        },
+        }
+    };
+
+    FFunctionGraphTask::CreateAndDispatchWhenReady(
+        MoveTemp(CompletionFunction),
         TStatId(),
-        &GenerationTasks,
+        &GenerationTasks,  // Pass pointer to FGraphEventArray
         ENamedThreads::GameThread
     );
 
