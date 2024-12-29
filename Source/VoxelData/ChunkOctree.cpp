@@ -1,6 +1,7 @@
 #include "ChunkOctree.h"
 #include "ProceduralMeshComponent.h"
-#include "Tasks/Task.h"
+#include "Async/Async.h"
+#include "Async/ParallelFor.h"
 
 FOctreeNode::FOctreeNode(const FIntVector& InPosition, int32 InSize, int32 InLOD, TArray<TSharedPtr<FVoxelChunk>>& InChunksToGenerate)
     : Position(InPosition)
@@ -111,51 +112,37 @@ void FChunkOctree::GenerateChunks()
     if (!RootNode || ChunksToGenerate.Num() == 0)
         return;
 
-    // Create tasks for chunk data generation
-    FGraphEventArray GenerationTasks;
-    GenerationTasks.Reserve(ChunksToGenerate.Num());
-
-    // Launch data generation tasks
-    for (auto& ChunkToGenerate : ChunksToGenerate)
-    {
-        // Create a TUniqueFunction for the task
-        TUniqueFunction<void()> TaskFunction = [ChunkToGenerate]()
-        {
-            // Generate chunk data using noise/SDF
-            ChunkToGenerate->GenerateData();
-        };
-
-        FGraphEventRef Task = FFunctionGraphTask::CreateAndDispatchWhenReady(
-            MoveTemp(TaskFunction),  // Use MoveTemp to transfer ownership
-            TStatId(),
-            nullptr,
-            ENamedThreads::AnyBackgroundThreadNormalTask
-        );
-        GenerationTasks.Add(Task);
-    }
-
-    // Create a completion task that will run after all generation tasks
-    TUniqueFunction<void()> CompletionFunction = [this]()
-    {
-        // This will run on the game thread after all chunks are generated
-        for (auto& ChunkToGenerate : ChunksToGenerate)
-        {
-            UProceduralMeshComponent* MeshComponent = NewObject<UProceduralMeshComponent>();
-            if (MeshComponent)
-            {
-                MeshComponent->RegisterComponent();
-                ChunkToGenerate->CreateMesh(MeshComponent);
-            }
-        }
-    };
-
-    FFunctionGraphTask::CreateAndDispatchWhenReady(
-        MoveTemp(CompletionFunction),
-        TStatId(),
-        &GenerationTasks,  // Pass pointer to FGraphEventArray
-        ENamedThreads::GameThread
-    );
-
-    // Clear the generation queue
+    // Store chunks locally since we'll clear the queue
+    TArray<TSharedPtr<FVoxelChunk>> ChunksToProcess = ChunksToGenerate;
     ChunksToGenerate.Empty();
+
+    // Create async task for chunk generation
+    Async(EAsyncExecution::ThreadPool, [ChunksToProcess]()
+    {
+        // Generate all chunks in parallel
+        ParallelFor(ChunksToProcess.Num(), [&](int32 Index)
+        {
+            if (ChunksToProcess[Index])
+            {
+                ChunksToProcess[Index]->GenerateData();
+            }
+        });
+
+        // Create meshes on game thread after generation is complete
+        AsyncTask(ENamedThreads::GameThread, [ChunksToProcess]()
+        {
+            for (auto& Chunk : ChunksToProcess)
+            {
+                if (Chunk && Chunk->IsGenerated())
+                {
+                    UProceduralMeshComponent* MeshComponent = NewObject<UProceduralMeshComponent>();
+                    if (MeshComponent)
+                    {
+                        MeshComponent->RegisterComponent();
+                        Chunk->CreateMesh(MeshComponent);
+                    }
+                }
+            }
+        });
+    });
 } 
