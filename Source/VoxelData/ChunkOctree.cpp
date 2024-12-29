@@ -111,37 +111,29 @@ void FChunkOctree::GenerateChunks()
     if (!RootNode || ChunksToGenerate.Num() == 0)
         return;
 
-    // Create a pipe for sequential mesh generation
-    UE::Tasks::FPipe MeshPipe{ TEXT("MeshGenerationPipe") };
-    
-    // Create tasks for chunk data generation (can be parallel)
-    TArray<UE::Tasks::FTask> GenerationTasks;
+    // Create tasks for chunk data generation
+    TArray<FGraphEventRef> GenerationTasks;
     GenerationTasks.Reserve(ChunksToGenerate.Num());
 
     // Launch data generation tasks
     for (auto& ChunkToGenerate : ChunksToGenerate)
     {
-        auto Task = UE::Tasks::Launch(
-            UE_SOURCE_LOCATION,
+        FGraphEventRef Task = FFunctionGraphTask::CreateAndDispatchWhenReady(
             [ChunkToGenerate]()
             {
                 // Generate chunk data using noise/SDF
                 ChunkToGenerate->GenerateData();
             },
-            UE::Tasks::ETaskPriority::Normal
+            TStatId(),
+            nullptr,
+            ENamedThreads::AnyBackgroundThreadNormalTask
         );
         GenerationTasks.Add(Task);
     }
 
-    // Create a joiner event to wait for all generation tasks
-    UE::Tasks::FTaskEvent GenerationComplete{ TEXT("ChunkGenerationComplete") };
-    GenerationComplete.AddPrerequisites(UE::Tasks::Prerequisites(GenerationTasks));
-    GenerationComplete.Trigger();
-
-    // Launch mesh creation task in the pipe after generation is complete
-    MeshPipe.Launch(
-        TEXT("MeshCreation"),
-        [this, GenerationComplete]()
+    // Create a completion task that will run after all generation tasks
+    FFunctionGraphTask::CreateAndDispatchWhenReady(
+        [this]()
         {
             // This will run on the game thread after all chunks are generated
             for (auto& ChunkToGenerate : ChunksToGenerate)
@@ -154,7 +146,9 @@ void FChunkOctree::GenerateChunks()
                 }
             }
         },
-        GenerationComplete // Wait for generation to complete before creating meshes
+        TStatId(),
+        &GenerationTasks,
+        ENamedThreads::GameThread
     );
 
     // Clear the generation queue
