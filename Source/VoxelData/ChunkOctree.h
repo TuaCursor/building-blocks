@@ -2,6 +2,8 @@
 
 #include "CoreMinimal.h"
 #include "VoxelChunk.h"
+#include "Tasks/Task.h"
+#include "Tasks/Pipe.h"
 
 class VOXELPLANET_API FOctreeNode 
 {

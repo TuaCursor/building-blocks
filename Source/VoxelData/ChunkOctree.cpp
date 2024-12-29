@@ -1,6 +1,6 @@
 #include "ChunkOctree.h"
 #include "ProceduralMeshComponent.h"
-#include "Async/TaskGraphInterfaces.h"
+#include "Tasks/Task.h"
 
 FOctreeNode::FOctreeNode(const FIntVector& InPosition, int32 InSize, int32 InLOD, TArray<TSharedPtr<FVoxelChunk>>& InChunksToGenerate)
     : Position(InPosition)
@@ -111,40 +111,51 @@ void FChunkOctree::GenerateChunks()
     if (!RootNode || ChunksToGenerate.Num() == 0)
         return;
 
-    // Use Unreal's task graph system instead of ParallelFor
-    FGraphEventArray Tasks;
-    Tasks.Reserve(ChunksToGenerate.Num());
+    // Create a pipe for sequential mesh generation
+    UE::Tasks::FPipe MeshPipe{ TEXT("MeshGenerationPipe") };
+    
+    // Create tasks for chunk data generation (can be parallel)
+    TArray<UE::Tasks::FTask> GenerationTasks;
+    GenerationTasks.Reserve(ChunksToGenerate.Num());
 
-    for (int32 Index = 0; Index < ChunksToGenerate.Num(); Index++)
+    // Launch data generation tasks
+    for (auto& ChunkToGenerate : ChunksToGenerate)
     {
-        auto& ChunkToGenerate = ChunksToGenerate[Index];
-        
-        Tasks.Add(FFunctionGraphTask::CreateAndDispatchWhenReady([ChunkToGenerate]()
-        {
-            // Generate chunk data using noise/SDF
-            ChunkToGenerate->GenerateData();
-        }, TStatId(), nullptr, ENamedThreads::AnyBackgroundThreadNormalTask));
+        auto Task = UE::Tasks::Launch(
+            UE_SOURCE_LOCATION,
+            [ChunkToGenerate]()
+            {
+                // Generate chunk data using noise/SDF
+                ChunkToGenerate->GenerateData();
+            },
+            UE::Tasks::ETaskPriority::Normal
+        );
+        GenerationTasks.Add(Task);
     }
 
-    // Wait for all tasks to complete
-    FTaskGraphInterface::Get().WaitUntilTasksComplete(Tasks);
+    // Create a joiner event to wait for all generation tasks
+    UE::Tasks::FTaskEvent GenerationComplete{ TEXT("ChunkGenerationComplete") };
+    GenerationComplete.AddPrerequisites(UE::Tasks::Prerequisites(GenerationTasks));
+    GenerationComplete.Trigger();
 
-    // Create meshes on the game thread
-    FTaskGraphInterface::Get().WaitUntilTasksComplete(FFunctionGraphTask::CreateAndDispatchWhenReady([this]()
-    {
-        for (auto& ChunkToGenerate : ChunksToGenerate)
+    // Launch mesh creation task in the pipe after generation is complete
+    MeshPipe.Launch(
+        TEXT("MeshCreation"),
+        [this, GenerationComplete]()
         {
-            // Create procedural mesh component for this chunk
-            UProceduralMeshComponent* MeshComponent = NewObject<UProceduralMeshComponent>();
-            if (MeshComponent)
+            // This will run on the game thread after all chunks are generated
+            for (auto& ChunkToGenerate : ChunksToGenerate)
             {
-                MeshComponent->RegisterComponent();
-
-                // Generate mesh using surface nets
-                ChunkToGenerate->CreateMesh(MeshComponent);
+                UProceduralMeshComponent* MeshComponent = NewObject<UProceduralMeshComponent>();
+                if (MeshComponent)
+                {
+                    MeshComponent->RegisterComponent();
+                    ChunkToGenerate->CreateMesh(MeshComponent);
+                }
             }
-        }
-    }, TStatId(), nullptr, ENamedThreads::GameThread));
+        },
+        GenerationComplete // Wait for generation to complete before creating meshes
+    );
 
     // Clear the generation queue
     ChunksToGenerate.Empty();
