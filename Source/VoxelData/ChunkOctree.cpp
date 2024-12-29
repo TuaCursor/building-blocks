@@ -1,4 +1,6 @@
 #include "ChunkOctree.h"
+#include "ProceduralMeshComponent.h"
+#include "Async/TaskGraphInterfaces.h"
 
 FOctreeNode::FOctreeNode(const FIntVector& InPosition, int32 InSize, int32 InLOD, TArray<TSharedPtr<FVoxelChunk>>& InChunksToGenerate)
     : Position(InPosition)
@@ -106,29 +108,43 @@ void FChunkOctree::UpdateLOD(const FVector& ViewerPosition)
 
 void FChunkOctree::GenerateChunks()
 {
-    // Similar to the Rust lod_terrain example's chunk generation
-    if (!RootNode)
+    if (!RootNode || ChunksToGenerate.Num() == 0)
         return;
 
-    // Create a task pool for parallel chunk generation
-    ParallelFor(ChunksToGenerate.Num(), 
-        [this](int32 Index)
+    // Use Unreal's task graph system instead of ParallelFor
+    FGraphEventArray Tasks;
+    Tasks.Reserve(ChunksToGenerate.Num());
+
+    for (int32 Index = 0; Index < ChunksToGenerate.Num(); Index++)
+    {
+        auto& ChunkToGenerate = ChunksToGenerate[Index];
+        
+        Tasks.Add(FFunctionGraphTask::CreateAndDispatchWhenReady([ChunkToGenerate]()
         {
-            auto& ChunkToGenerate = ChunksToGenerate[Index];
-            
             // Generate chunk data using noise/SDF
             ChunkToGenerate->GenerateData();
+        }, TStatId(), nullptr, ENamedThreads::AnyBackgroundThreadNormalTask));
+    }
 
+    // Wait for all tasks to complete
+    FTaskGraphInterface::Get().WaitUntilTasksComplete(Tasks);
+
+    // Create meshes on the game thread
+    FTaskGraphInterface::Get().WaitUntilTasksComplete(FFunctionGraphTask::CreateAndDispatchWhenReady([this]()
+    {
+        for (auto& ChunkToGenerate : ChunksToGenerate)
+        {
             // Create procedural mesh component for this chunk
             UProceduralMeshComponent* MeshComponent = NewObject<UProceduralMeshComponent>();
-            MeshComponent->RegisterComponent();
+            if (MeshComponent)
+            {
+                MeshComponent->RegisterComponent();
 
-            // Generate mesh using surface nets
-            ChunkToGenerate->CreateMesh(MeshComponent);
-        },
-        // Use true for background thread processing
-        true
-    );
+                // Generate mesh using surface nets
+                ChunkToGenerate->CreateMesh(MeshComponent);
+            }
+        }
+    }, TStatId(), nullptr, ENamedThreads::GameThread));
 
     // Clear the generation queue
     ChunksToGenerate.Empty();
