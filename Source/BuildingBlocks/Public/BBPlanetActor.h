@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "ProceduralMeshComponent.h"
 #include "GameFramework/Actor.h"
 #include "Mesh/BBSurfaceNets.h"
 #include "BBPlanetActor.generated.h"
