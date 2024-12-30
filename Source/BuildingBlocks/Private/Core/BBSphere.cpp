@@ -12,10 +12,10 @@ bool FBBSphere::Intersects(const FBBSphere& Other) const
     return Distance - Other.Radius < Radius;
 }
 
-FBBBox FBBSphere::GetBounds() const
+FBBExtent FBBSphere::GetBounds() const
 {
     const FVector Extent(Radius);
-    return FBBBox(
+    return FBBExtent(
         FIntVector(Center - Extent),
         FIntVector(Center + Extent)
     );

@@ -185,9 +185,9 @@ namespace
     }
 }
 
-FIntBox UBBSurfaceNetsLibrary::GetPaddedSurfaceNetsChunkExtent(const FIntBox& ChunkExtent)
+FBBExtent UBBSurfaceNetsLibrary::GetPaddedSurfaceNetsChunkExtent(const FBBExtent& ChunkExtent)
 {
-    return FIntBox(
+    return FBBExtent(
         ChunkExtent.Min - FIntVector(1),
         ChunkExtent.Max + FIntVector(1)
     );

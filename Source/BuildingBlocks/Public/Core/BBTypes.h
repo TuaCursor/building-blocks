@@ -4,7 +4,7 @@
 #include "BBTypes.generated.h"
 
 USTRUCT(BlueprintType)
-struct BUILDINGBLOCKS_API FBBBox
+struct BUILDINGBLOCKS_API FBBExtent
 {
     GENERATED_BODY()
 
@@ -14,12 +14,12 @@ struct BUILDINGBLOCKS_API FBBBox
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "BuildingBlocks")
     FIntVector Max;
 
-    FBBBox() : Min(FIntVector::ZeroValue), Max(FIntVector::ZeroValue) {}
-    FBBBox(const FIntVector& InMin, const FIntVector& InMax) : Min(InMin), Max(InMax) {}
+    FBBExtent() : Min(FIntVector::ZeroValue), Max(FIntVector::ZeroValue) {}
+    FBBExtent(const FIntVector& InMin, const FIntVector& InMax) : Min(InMin), Max(InMax) {}
 
-    static FBBBox FromMinAndMax(const FIntVector& Min, const FIntVector& Max)
+    static FBBExtent FromMinAndMax(const FIntVector& Min, const FIntVector& Max)
     {
-        return FBBBox(Min, Max);
+        return FBBExtent(Min, Max);
     }
 
     FIntVector GetSize() const
@@ -34,7 +34,7 @@ struct BUILDINGBLOCKS_API FBBBox
                Point.Z >= Min.Z && Point.Z < Max.Z;
     }
 
-    bool Intersects(const FBBBox& Other) const
+    bool Intersects(const FBBExtent& Other) const
     {
         return !(Other.Max.X <= Min.X || Other.Min.X >= Max.X ||
                 Other.Max.Y <= Min.Y || Other.Min.Y >= Max.Y ||
@@ -42,4 +42,4 @@ struct BUILDINGBLOCKS_API FBBBox
     }
 };
 
-typedef FBBBox FIntBox; 
+typedef FBBExtent FIntBox; 

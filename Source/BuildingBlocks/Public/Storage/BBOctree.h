@@ -20,9 +20,9 @@ struct FOctreeNode
     FOctreeNode(const FIntVector& InPosition, int32 InSize, int32 InLOD)
         : Position(InPosition), Size(InSize), LOD(InLOD), bIsLeaf(true) {}
 
-    FIntBox GetBounds() const
+    FBBExtent GetBounds() const
     {
-        return FIntBox(Position, Position + FIntVector(Size));
+        return FBBExtent(Position, Position + FIntVector(Size));
     }
 };
 

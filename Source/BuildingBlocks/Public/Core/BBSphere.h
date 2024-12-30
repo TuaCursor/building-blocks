@@ -20,7 +20,7 @@ struct BUILDINGBLOCKS_API FBBSphere
 
     bool Contains(const FBBSphere& Other) const;
     bool Intersects(const FBBSphere& Other) const;
-    FBBBox GetBounds() const;
+    FBBExtent GetBounds() const;
 
     static FBBSphere FromCenterAndRadius(const FVector& Center, float Radius)
     {
