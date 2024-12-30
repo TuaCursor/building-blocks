@@ -55,7 +55,7 @@ class BUILDINGBLOCKS_API UBBSurfaceNetsLibrary : public UBlueprintFunctionLibrar
 
 public:
     UFUNCTION(BlueprintCallable, Category = "BuildingBlocks|SurfaceNets")
-    static FBBExtent GetPaddedSurfaceNetsChunkExtent(const FBBExtent& ChunkExtent);
+    static void GetPaddedSurfaceNetsChunkExtent(const FBBExtent& ChunkExtent, FBBExtent& OutExtent);
 
     UFUNCTION(BlueprintCallable, Category = "BuildingBlocks|SurfaceNets")
     static void GenerateSurfaceNets(

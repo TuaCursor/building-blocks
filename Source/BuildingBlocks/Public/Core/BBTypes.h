@@ -40,6 +40,4 @@ struct BUILDINGBLOCKS_API FBBExtent
                 Other.Max.Y <= Min.Y || Other.Min.Y >= Max.Y ||
                 Other.Max.Z <= Min.Z || Other.Min.Z >= Max.Z);
     }
-};
-
-typedef FBBExtent FIntBox; 
+}; 

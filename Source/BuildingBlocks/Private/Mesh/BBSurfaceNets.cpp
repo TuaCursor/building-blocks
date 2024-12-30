@@ -20,6 +20,14 @@ void FBBSurfaceNetsBuffer::Reset(int32 ArraySize)
     StrideToIndex.SetNum(ArraySize);
 }
 
+void UBBSurfaceNetsLibrary::GetPaddedSurfaceNetsChunkExtent(const FBBExtent& ChunkExtent, FBBExtent& OutExtent)
+{
+    OutExtent = FBBExtent(
+        ChunkExtent.Min - FIntVector(1),
+        ChunkExtent.Max + FIntVector(1)
+    );
+}
+
 namespace
 {
     const FIntVector CubeCornerOffsets[8] = {
@@ -183,14 +191,6 @@ namespace
             }
         }
     }
-}
-
-FBBExtent UBBSurfaceNetsLibrary::GetPaddedSurfaceNetsChunkExtent(const FBBExtent& ChunkExtent)
-{
-    return FBBExtent(
-        ChunkExtent.Min - FIntVector(1),
-        ChunkExtent.Max + FIntVector(1)
-    );
 }
 
 void UBBSurfaceNetsLibrary::GenerateSurfaceNets(
