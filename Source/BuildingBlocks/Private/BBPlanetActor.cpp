@@ -33,6 +33,14 @@ ABBPlanetActor::ABBPlanetActor()
 void ABBPlanetActor::BeginPlay()
 {
     Super::BeginPlay();
+    
+    // Ensure we have a valid initial state
+    if (MeshComponent)
+    {
+        MeshComponent->ClearAllMeshSections();
+        Chunks.Empty();
+    }
+    
     GeneratePlanet();
 }
 
@@ -50,13 +58,18 @@ void ABBPlanetActor::OnConstruction(const FTransform& Transform)
 
 float ABBPlanetActor::GetSignedDistance(const FVector& Position) const
 {
+    // Scale position to match the desired radius
     const float DistanceFromCenter = Position.Size();
-    
-    // Base sphere SDF
+    if (DistanceFromCenter < SMALL_NUMBER)
+    {
+        return -Radius; // Inside
+    }
+
+    // Base sphere SDF (negative inside, positive outside)
     float Distance = DistanceFromCenter - Radius;
 
     // Add noise
-    if (NoiseAmplitude > 0.0f)
+    if (NoiseAmplitude > 0.0f && DistanceFromCenter > SMALL_NUMBER)
     {
         const FVector NormalizedPos = Position / DistanceFromCenter;
         const float NoiseValue = SimpleNoise3D(
@@ -75,7 +88,7 @@ void ABBPlanetActor::UpdateLOD()
 {
     // Get camera position
     APlayerCameraManager* CameraManager = GetWorld()->GetFirstPlayerController()->PlayerCameraManager;
-    if (!CameraManager)
+    if (!CameraManager || !MeshComponent)
     {
         return;
     }
@@ -83,10 +96,11 @@ void ABBPlanetActor::UpdateLOD()
     FVector CameraLocation = CameraManager->GetCameraLocation();
     
     // Create view sphere for LOD calculation
-    FBBSphere ViewSphere(CameraLocation, ChunkSize * LODDistanceMultiplier);
+    const float ViewRadius = ChunkSize * LODDistanceMultiplier * FMath::Pow(2.0f, MaxLODLevels);
+    FBBSphere ViewSphere(CameraLocation, ViewRadius);
 
     // Create root node for octree
-    const int32 RootSize = FMath::RoundUpToPowerOfTwo(Resolution);
+    const int32 RootSize = FMath::RoundUpToPowerOfTwo(Resolution) * VoxelSize;
     FOctreeNode RootNode(FIntVector::ZeroValue, RootSize, 0);
 
     // Build octree
@@ -96,21 +110,25 @@ void ABBPlanetActor::UpdateLOD()
     TArray<FOctreeNode> VisibleNodes;
     UBBOctreeLibrary::GetVisibleChunks(RootNode, ViewSphere, VisibleNodes);
 
+    // Track which chunks are still needed
+    TSet<int32> ActiveChunks;
+
     // Update chunks
     for (const FOctreeNode& Node : VisibleNodes)
     {
         FPlanetChunk NewChunk;
-        NewChunk.Position = Node.Position;
+        NewChunk.Position = Node.Position / VoxelSize; // Convert to grid coordinates
         NewChunk.LOD = Node.LOD;
         NewChunk.bIsVisible = true;
-        NewChunk.MeshSectionIndex = Chunks.Num();
 
         bool bChunkExists = false;
-        for (FPlanetChunk& ExistingChunk : Chunks)
+        for (int32 i = 0; i < Chunks.Num(); ++i)
         {
-            if (ExistingChunk.Position == Node.Position && ExistingChunk.LOD == Node.LOD)
+            FPlanetChunk& ExistingChunk = Chunks[i];
+            if (ExistingChunk.Position == NewChunk.Position && ExistingChunk.LOD == NewChunk.LOD)
             {
                 ExistingChunk.bIsVisible = true;
+                ActiveChunks.Add(i);
                 bChunkExists = true;
                 break;
             }
@@ -118,28 +136,23 @@ void ABBPlanetActor::UpdateLOD()
 
         if (!bChunkExists)
         {
+            NewChunk.MeshSectionIndex = Chunks.Num();
+            ActiveChunks.Add(NewChunk.MeshSectionIndex);
             Chunks.Add(NewChunk);
             GenerateChunk(NewChunk);
         }
     }
 
-    // Hide chunks that are no longer visible
-    for (FPlanetChunk& Chunk : Chunks)
+    // Hide or remove chunks that are no longer visible
+    for (int32 i = 0; i < Chunks.Num(); ++i)
     {
-        bool bStillVisible = false;
-        for (const FOctreeNode& Node : VisibleNodes)
+        if (!ActiveChunks.Contains(i))
         {
-            if (Chunk.Position == Node.Position && Chunk.LOD == Node.LOD)
-            {
-                bStillVisible = true;
-                break;
-            }
+            MeshComponent->SetMeshSectionVisible(i, false);
         }
-
-        if (!bStillVisible)
+        else
         {
-            Chunk.bIsVisible = false;
-            MeshComponent->SetMeshSectionVisible(Chunk.MeshSectionIndex, false);
+            MeshComponent->SetMeshSectionVisible(i, true);
         }
     }
 }
@@ -155,6 +168,9 @@ void ABBPlanetActor::GenerateChunk(const FPlanetChunk& Chunk)
     TArray<float> SignedDistanceField;
     SignedDistanceField.SetNum(ChunkResolution * ChunkResolution * ChunkResolution);
 
+    // Calculate chunk world position
+    const FVector ChunkWorldPos = FVector(Chunk.Position) * ChunkVoxelSize;
+
     // Fill the SDF
     for (int32 Z = 0; Z < ChunkResolution; ++Z)
     {
@@ -168,7 +184,7 @@ void ABBPlanetActor::GenerateChunk(const FPlanetChunk& Chunk)
                     Z * ChunkVoxelSize - HalfSize
                 );
 
-                const FVector WorldPosition = LocalPosition + FVector(Chunk.Position);
+                const FVector WorldPosition = LocalPosition + ChunkWorldPos;
                 const int32 Index = X + Y * ChunkResolution + Z * ChunkResolution * ChunkResolution;
                 SignedDistanceField[Index] = GetSignedDistance(WorldPosition);
             }
@@ -184,6 +200,12 @@ void ABBPlanetActor::GenerateChunk(const FPlanetChunk& Chunk)
         bEstimateNormals,
         MeshBuffer
     );
+
+    // Skip if no vertices were generated
+    if (MeshBuffer.Mesh.Positions.Num() == 0)
+    {
+        return;
+    }
 
     // Create the procedural mesh section
     TArray<FVector> Vertices = MoveTemp(MeshBuffer.Mesh.Positions);

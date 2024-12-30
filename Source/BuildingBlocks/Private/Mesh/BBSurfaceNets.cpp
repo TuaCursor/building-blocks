@@ -150,7 +150,7 @@ namespace
     {
         const float D1 = SDF[P1Stride];
         const float D2 = SDF[P2Stride];
-        const bool bNegativeFace = D1 > 0.0f && D2 < 0.0f;
+        const bool bNegativeFace = D1 < 0.0f && D2 > 0.0f;
         if (D1 * D2 >= 0.0f)
         {
             return;
@@ -172,22 +172,22 @@ namespace
         {
             if (bNegativeFace)
             {
-                OutIndices.Append({ V1, V4, V2, V1, V3, V4 });
+                OutIndices.Append({ V1, V2, V4, V1, V4, V3 });
             }
             else
             {
-                OutIndices.Append({ V1, V2, V4, V1, V4, V3 });
+                OutIndices.Append({ V1, V4, V2, V1, V3, V4 });
             }
         }
         else
         {
             if (bNegativeFace)
             {
-                OutIndices.Append({ V2, V3, V4, V2, V1, V3 });
+                OutIndices.Append({ V2, V4, V3, V2, V3, V1 });
             }
             else
             {
-                OutIndices.Append({ V2, V4, V3, V2, V3, V1 });
+                OutIndices.Append({ V2, V3, V4, V2, V1, V3 });
             }
         }
     }
