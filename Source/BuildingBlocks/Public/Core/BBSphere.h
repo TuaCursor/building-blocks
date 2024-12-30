@@ -1,7 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "BBPoint.h"
+#include "Core/BBTypes.h"
 #include "BBSphere.generated.h"
 
 USTRUCT(BlueprintType)
@@ -20,7 +20,7 @@ struct BUILDINGBLOCKS_API FBBSphere
 
     bool Contains(const FBBSphere& Other) const;
     bool Intersects(const FBBSphere& Other) const;
-    FBox GetBounds() const;
+    FBBBox GetBounds() const;
 
     static FBBSphere FromCenterAndRadius(const FVector& Center, float Radius)
     {

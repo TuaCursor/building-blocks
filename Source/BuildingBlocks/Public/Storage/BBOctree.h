@@ -1,7 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "Core/BBPoint.h"
+#include "Core/BBTypes.h"
 #include "Core/BBSphere.h"
 #include "BBOctree.generated.h"
 
