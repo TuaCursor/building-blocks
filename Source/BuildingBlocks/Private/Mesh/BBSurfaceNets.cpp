@@ -17,15 +17,7 @@ void FBBSurfaceNetsBuffer::Reset(int32 ArraySize)
     Mesh.Clear();
     SurfacePoints.Empty();
     SurfaceStrides.Empty();
-    StrideToIndex.SetNum(ArraySize);
-}
-
-void UBBSurfaceNetsLibrary::GetPaddedSurfaceNetsChunkExtent(const FBBExtent& ChunkExtent, FBBExtent& OutExtent)
-{
-    OutExtent = FBBExtent(
-        ChunkExtent.Min - FIntVector(1),
-        ChunkExtent.Max + FIntVector(1)
-    );
+    StrideToIndex.SetNum(ArraySize, -1);
 }
 
 namespace
@@ -125,8 +117,13 @@ namespace
             }
         }
 
+        if (Count == 0)
+        {
+            return false;
+        }
+
         Centroid /= Count;
-        const FVector Position = VoxelSize * (FVector(CubeMinCorner) + Centroid + FVector(0.5f));
+        const FVector Position = VoxelSize * (FVector(CubeMinCorner) + Centroid);
 
         Output.Mesh.Positions.Add(Position);
         if (bEstimateNormals)
@@ -161,6 +158,11 @@ namespace
         const int32 V3 = StrideToIndex[P1Stride - AxisCStride];
         const int32 V4 = StrideToIndex[P1Stride - AxisBStride - AxisCStride];
 
+        if (V1 == -1 || V2 == -1 || V3 == -1 || V4 == -1)
+        {
+            return;
+        }
+
         const FVector& Pos1 = Positions[V1];
         const FVector& Pos2 = Positions[V2];
         const FVector& Pos3 = Positions[V3];
@@ -172,11 +174,11 @@ namespace
         {
             if (bNegativeFace)
             {
-                OutIndices.Append({ V1, V2, V4, V1, V4, V3 });
+                OutIndices.Append({ V1, V4, V2, V1, V3, V4 });
             }
             else
             {
-                OutIndices.Append({ V1, V4, V2, V1, V3, V4 });
+                OutIndices.Append({ V1, V2, V4, V1, V4, V3 });
             }
         }
         else
@@ -191,6 +193,14 @@ namespace
             }
         }
     }
+}
+
+void UBBSurfaceNetsLibrary::GetPaddedSurfaceNetsChunkExtent(const FBBExtent& ChunkExtent, FBBExtent& OutExtent)
+{
+    OutExtent = FBBExtent(
+        ChunkExtent.Min - FIntVector(1),
+        ChunkExtent.Max + FIntVector(1)
+    );
 }
 
 void UBBSurfaceNetsLibrary::GenerateSurfaceNets(

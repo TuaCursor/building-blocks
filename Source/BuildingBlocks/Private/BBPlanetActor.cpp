@@ -58,13 +58,8 @@ void ABBPlanetActor::OnConstruction(const FTransform& Transform)
 
 float ABBPlanetActor::GetSignedDistance(const FVector& Position) const
 {
-    // Scale position to match the desired radius
     const float DistanceFromCenter = Position.Size();
-    if (DistanceFromCenter < SMALL_NUMBER)
-    {
-        return -Radius; // Inside
-    }
-
+    
     // Base sphere SDF (negative inside, positive outside)
     float Distance = DistanceFromCenter - Radius;
 
@@ -78,7 +73,9 @@ float ABBPlanetActor::GetSignedDistance(const FVector& Position) const
             NormalizedPos.Z * NoiseScale
         );
         
-        Distance += NoiseValue * NoiseAmplitude;
+        // Scale noise by distance to maintain spherical shape at distance
+        const float NoiseScale = FMath::Min(1.0f, Radius / DistanceFromCenter);
+        Distance += NoiseValue * NoiseAmplitude * NoiseScale;
     }
 
     return Distance;
@@ -163,20 +160,20 @@ void ABBPlanetActor::GenerateChunk(const FPlanetChunk& Chunk)
     const float ChunkVoxelSize = VoxelSize * (1 << Chunk.LOD);
     
     // Create the signed distance field for this chunk
-    const FIntVector Dimensions(ChunkResolution, ChunkResolution, ChunkResolution);
+    const FIntVector Dimensions(ChunkResolution + 1, ChunkResolution + 1, ChunkResolution + 1);
     const float HalfSize = (ChunkResolution * ChunkVoxelSize) * 0.5f;
     TArray<float> SignedDistanceField;
-    SignedDistanceField.SetNum(ChunkResolution * ChunkResolution * ChunkResolution);
+    SignedDistanceField.SetNum(Dimensions.X * Dimensions.Y * Dimensions.Z);
 
     // Calculate chunk world position
     const FVector ChunkWorldPos = FVector(Chunk.Position) * ChunkVoxelSize;
 
     // Fill the SDF
-    for (int32 Z = 0; Z < ChunkResolution; ++Z)
+    for (int32 Z = 0; Z < Dimensions.Z; ++Z)
     {
-        for (int32 Y = 0; Y < ChunkResolution; ++Y)
+        for (int32 Y = 0; Y < Dimensions.Y; ++Y)
         {
-            for (int32 X = 0; X < ChunkResolution; ++X)
+            for (int32 X = 0; X < Dimensions.X; ++X)
             {
                 const FVector LocalPosition(
                     X * ChunkVoxelSize - HalfSize,
@@ -185,7 +182,7 @@ void ABBPlanetActor::GenerateChunk(const FPlanetChunk& Chunk)
                 );
 
                 const FVector WorldPosition = LocalPosition + ChunkWorldPos;
-                const int32 Index = X + Y * ChunkResolution + Z * ChunkResolution * ChunkResolution;
+                const int32 Index = X + Y * Dimensions.X + Z * Dimensions.X * Dimensions.Y;
                 SignedDistanceField[Index] = GetSignedDistance(WorldPosition);
             }
         }
