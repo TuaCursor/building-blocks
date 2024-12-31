@@ -38,12 +38,6 @@ protected:
     float Radius = 1000.0f;
 
     UPROPERTY(EditAnywhere, Category = "Planet Generation")
-    float NoiseScale = 0.001f;
-
-    UPROPERTY(EditAnywhere, Category = "Planet Generation")
-    float NoiseAmplitude = 100.0f;
-
-    UPROPERTY(EditAnywhere, Category = "Planet Generation")
     int32 Resolution = 100;
 
     UPROPERTY(EditAnywhere, Category = "Planet Generation")

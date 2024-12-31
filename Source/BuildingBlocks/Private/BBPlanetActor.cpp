@@ -4,23 +4,6 @@
 #include "GameFramework/PlayerController.h"
 #include "Camera/PlayerCameraManager.h"
 
-namespace
-{
-    // Simple 3D noise function based on sine waves
-    float SimpleNoise3D(float X, float Y, float Z)
-    {
-        const float Frequency = 1.0f;
-        return (
-            FMath::Sin(X * Frequency) * 
-            FMath::Sin(Y * Frequency) * 
-            FMath::Sin(Z * Frequency) +
-            FMath::Sin(X * Frequency * 2.1f) * 
-            FMath::Sin(Y * Frequency * 2.3f) * 
-            FMath::Sin(Z * Frequency * 2.7f) * 0.5f
-        ) * 0.5f;
-    }
-}
-
 ABBPlanetActor::ABBPlanetActor()
 {
     PrimaryActorTick.bCanEverTick = true;
@@ -58,27 +41,8 @@ void ABBPlanetActor::OnConstruction(const FTransform& Transform)
 
 float ABBPlanetActor::GetSignedDistance(const FVector& Position) const
 {
-    const float DistanceFromCenter = Position.Size();
-    
-    // Base sphere SDF (negative inside, positive outside)
-    float Distance = DistanceFromCenter - Radius;
-
-    // Add noise
-    if (NoiseAmplitude > 0.0f && DistanceFromCenter > SMALL_NUMBER)
-    {
-        const FVector NormalizedPos = Position / DistanceFromCenter;
-        const float NoiseValue = SimpleNoise3D(
-            NormalizedPos.X * NoiseScale,
-            NormalizedPos.Y * NoiseScale,
-            NormalizedPos.Z * NoiseScale
-        );
-        
-        // Scale noise by distance to maintain spherical shape at distance
-        const float NoiseScale = FMath::Min(1.0f, Radius / DistanceFromCenter);
-        Distance += NoiseValue * NoiseAmplitude * NoiseScale;
-    }
-
-    return Distance;
+    // Simple sphere SDF (negative inside, positive outside)
+    return Position.Size() - Radius;
 }
 
 void ABBPlanetActor::UpdateLOD()
